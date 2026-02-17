@@ -1,0 +1,18 @@
+trailing_comma = "Never"
+tab_spaces = 4
+reorder_imports = true
+normalize_comments = true
+hard_tabs = false
+match_arm_blocks = true
+match_block_trailing_comma = false
+combine_control_expr = false
+hex_literal_case = "Upper"
+imports_granularity = "Module"
+newline_style = "Unix"
+normalize_doc_attributes = true
+reorder_impl_items = true
+group_imports = "StdExternalCrate"
+use_field_init_shorthand = true
+type_punctuation_density = "Wide"
+edition = "2024"
+

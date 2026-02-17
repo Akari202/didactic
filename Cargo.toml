@@ -1,0 +1,19 @@
+[package]
+name = "didactic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.59", features = ["derive"] }
+env_logger = "0.11.9"
+grass = "0.13.4"
+log = "0.4.29"
+regex = "1.12.0"
+scraper = "0.25.0"
+serde = { version = "1.0.228", features = ["derive"] }
+tera = "1.20.1"
+toml = "1.0.2"
+typst-as-lib = { version = "0.15.4", features = ["typst-html"] }
+typst-assets = { version = "0.14.2", features = ["fonts"] }
+typst-html = "0.14.2"
+xxhash-rust = { version = "0.8.0", features = ["xxh3"] }
