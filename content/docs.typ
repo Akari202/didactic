@@ -19,13 +19,20 @@
 
 == Config File
 
+Generally self explanatory. The links will be compiled in at the slug.
+
 #raw(
   block: true,
   lang: "toml",
   "[site]
 title = \"\"
 author = \"\"
-base_url = \"https://example.com\"",
+base_url = \"https://example.com\"
+
+[[links]]
+slug = \"name\"
+path = \"path/to/content/dir\"
+",
 )
 
 = Typst

@@ -1,5 +1,6 @@
 mod build;
 mod config;
+mod file_map;
 mod meta;
 mod path_util;
 

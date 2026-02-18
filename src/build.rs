@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fs::{self};
 use std::path::{Path, PathBuf};
 
-use log::{info, warn};
+use log::{debug, info, warn};
 use regex::{Captures, Regex};
 use scraper::{Html, Selector};
 use tera::{Context, Tera};
@@ -12,6 +12,7 @@ use typst_html::HtmlDocument;
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::config::Config;
+use crate::file_map::FileMap;
 use crate::meta::{PageMeta, collect_page_meta};
 
 pub fn run_build(dir: PathBuf) -> Result<(), Box<dyn Error>> {
@@ -21,7 +22,20 @@ pub fn run_build(dir: PathBuf) -> Result<(), Box<dyn Error>> {
 
     info!("Reading config");
     let config_path = dir.join("didactic.toml");
-    let config: Config = toml::from_str(&fs::read_to_string(config_path)?)?;
+    let config: Config = if config_path.exists() {
+        Ok::<Config, Box<dyn Error>>(toml::from_str(&fs::read_to_string(config_path)?)?)
+    } else {
+        Err("No manifest file found".into())
+    }?;
+
+    info!("Building logical map");
+    let mut file_map = FileMap::with_resolver_base(&dir);
+    file_map.add_directory(&content_path, None)?;
+    config
+        .links
+        .iter()
+        .try_for_each(|i| file_map.add_directory(&dir.join(&i.path), Some(Path::new(&i.slug))))?;
+    // dbg!(&file_map);
 
     let scss_path = dir.join("templates/main.scss");
     if scss_path.exists() {
@@ -49,26 +63,23 @@ pub fn run_build(dir: PathBuf) -> Result<(), Box<dyn Error>> {
 
     info!("Initializing Typst engine");
     let engine = TypstEngine::builder()
-        .with_file_system_resolver(".")
+        .with_file_system_resolver(dir)
         .fonts(typst_assets::fonts())
         .build();
 
     info!("Compiling content");
     let mut cache: HashMap<PathBuf, HtmlDocument> = HashMap::new();
-    let page_metas = collect_page_meta(&content_path, &content_path, &engine, &mut cache, true)?;
+    let page_metas = collect_page_meta(Path::new(""), &file_map, &engine, &mut cache, true)?;
+    // dbg!(&page_metas);
 
     info!("Generating RSS feed");
     generate_rss(&page_metas, &config, &output_path)?;
 
     info!("Processing templates");
-    let process_dirs = ProcessDirs {
-        src: &content_path,
-        out: &output_path,
-        base: &content_path
-    };
-
     process_typst_files(
-        process_dirs,
+        Path::new(""),
+        &file_map,
+        &output_path,
         &tera,
         &page_metas,
         &config,
@@ -80,68 +91,66 @@ pub fn run_build(dir: PathBuf) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-struct ProcessDirs<'a> {
-    src: &'a Path,
-    out: &'a Path,
-    base: &'a Path
-}
-
+#[allow(clippy::too_many_arguments)]
 fn process_typst_files(
-    dirs: ProcessDirs,
+    prefix: &Path,
+    file_map: &FileMap,
+    out_dir: &Path,
     tera: &Tera,
     page_metas: &[PageMeta],
     config: &Config,
     cache: &mut HashMap<PathBuf, HtmlDocument>,
     asset_hashes: &HashMap<String, String>
 ) -> Result<(), Box<dyn Error>> {
-    for entry in fs::read_dir(dirs.src)? {
-        let entry = entry?;
-        let path = entry.path();
+    for dir in file_map.subdirs_at(prefix) {
+        process_typst_files(
+            &dir,
+            file_map,
+            out_dir,
+            tera,
+            page_metas,
+            config,
+            cache,
+            asset_hashes
+        )?;
+    }
 
-        if path.is_dir() {
-            let dirs = ProcessDirs {
-                src: &path,
-                out: dirs.out,
-                base: dirs.base
-            };
-            process_typst_files(dirs, tera, page_metas, config, cache, asset_hashes)?;
-        } else if path.extension().and_then(|s| s.to_str()) == Some("typ") {
-            info!("Rendering {}", path.display());
+    for logical in file_map.typ_files_at(prefix) {
+        info!("Rendering {}", logical.display());
 
-            let doc = cache
-                .remove(&path)
-                .ok_or_else(|| format!("no cached doc for {}", path.display()))?;
+        let doc = cache
+            .remove(logical)
+            .ok_or_else(|| format!("no cached doc for {}", logical.display()))?;
 
-            let typst_html =
-                extract_body_content(&typst_html::html(&doc).map_err(|e| format!("{:?}", e))?);
+        let typst_html =
+            extract_body_content(&typst_html::html(&doc).map_err(|e| format!("{:?}", e))?);
 
-            let rel_path = path.strip_prefix(dirs.base)?;
-            let mut out_path = dirs.out.join(rel_path);
-            out_path.set_extension("html");
-            if let Some(parent) = out_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-
-            let current_section = if rel_path.components().count() == 1 {
-                String::new()
-            } else {
-                rel_path
-                    .components()
-                    .next()
-                    .map(|c| c.as_os_str().to_string_lossy().to_string())
-                    .unwrap_or_default()
-            };
-
-            let mut context = Context::new();
-            context.insert("asset_hashes", asset_hashes);
-            context.insert("current_section", &current_section);
-            context.insert("menu", &page_metas);
-            context.insert("content", &typst_html);
-            context.insert("site", &config.site);
-
-            let rendered = bust_image_urls(&tera.render("index.html", &context)?, asset_hashes);
-            fs::write(out_path, rendered)?;
+        let mut out_path = out_dir.join(logical);
+        out_path.set_extension("html");
+        if let Some(parent) = out_path.parent() {
+            fs::create_dir_all(parent)?;
         }
+
+        let current_section = if logical.components().count() == 1 {
+            String::new()
+        } else {
+            logical
+                .components()
+                .next()
+                .map(|c| c.as_os_str().to_string_lossy().to_string())
+                .unwrap_or_default()
+        };
+
+        let mut context = Context::new();
+        context.insert("asset_hashes", asset_hashes);
+        context.insert("current_section", &current_section);
+        context.insert("menu", &page_metas);
+        context.insert("content", &typst_html);
+        context.insert("site", &config.site);
+
+        let rendered = bust_image_urls(&tera.render("index.html", &context)?, asset_hashes);
+        debug!("Writing file {}", out_dir.display());
+        fs::write(out_path, rendered)?;
     }
     Ok(())
 }
@@ -263,7 +272,7 @@ fn collect_asset_hashes(
         } else {
             let ext = path.extension().and_then(|s| s.to_str());
             match ext {
-                Some("html") | Some("typ") => {} // skip generated and source files
+                Some("html") | Some("typ") => {}
                 _ => {
                     let hash = hash_file(&path)?;
                     let rel = path.strip_prefix(base)?;
