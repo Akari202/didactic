@@ -11,7 +11,9 @@ pub struct Config {
 pub struct SiteConfig {
     pub title: String,
     pub author: String,
-    pub base_url: String
+    pub base_url: String,
+    #[serde(default)]
+    pub description: String
 }
 
 #[derive(Debug, Deserialize, Clone)]

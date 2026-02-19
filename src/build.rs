@@ -15,7 +15,7 @@ use crate::config::Config;
 use crate::file_map::FileMap;
 use crate::meta::{PageMeta, collect_page_meta};
 
-pub fn run_build(dir: PathBuf) -> Result<(), Box<dyn Error>> {
+pub fn run_build(dir: PathBuf, minify: bool) -> Result<(), Box<dyn Error>> {
     let content_path = dir.join("content");
     let output_path = dir.join("dist");
     fs::create_dir_all(&output_path)?;
@@ -35,7 +35,7 @@ pub fn run_build(dir: PathBuf) -> Result<(), Box<dyn Error>> {
         .links
         .iter()
         .try_for_each(|i| file_map.add_directory(&dir.join(&i.path), Some(Path::new(&i.slug))))?;
-    // dbg!(&file_map);
+    debug!("{:?}", &file_map);
 
     let scss_path = dir.join("templates/main.scss");
     if scss_path.exists() {
@@ -52,7 +52,13 @@ pub fn run_build(dir: PathBuf) -> Result<(), Box<dyn Error>> {
         copy_assets(&static_path, &output_path)?;
     }
     copy_assets(&content_path, &output_path)?;
+    config.links.iter().try_for_each(|i| {
+        let out = output_path.join(&i.slug);
+        fs::create_dir_all(&out)?;
+        copy_assets(&dir.join(&i.path), &out)
+    })?;
     let asset_hashes = collect_asset_hashes(&output_path, &output_path)?;
+    debug!("{:?}", &asset_hashes);
 
     info!("Initializing Tera");
     let tera = Tera::new(
@@ -70,7 +76,7 @@ pub fn run_build(dir: PathBuf) -> Result<(), Box<dyn Error>> {
     info!("Compiling content");
     let mut cache: HashMap<PathBuf, HtmlDocument> = HashMap::new();
     let page_metas = collect_page_meta(Path::new(""), &file_map, &engine, &mut cache, true)?;
-    // dbg!(&page_metas);
+    debug!("{:?}", &page_metas);
 
     info!("Generating RSS feed");
     generate_rss(&page_metas, &config, &output_path)?;
@@ -84,7 +90,8 @@ pub fn run_build(dir: PathBuf) -> Result<(), Box<dyn Error>> {
         &page_metas,
         &config,
         &mut cache,
-        &asset_hashes
+        &asset_hashes,
+        minify
     )?;
 
     info!("Build complete");
@@ -100,7 +107,8 @@ fn process_typst_files(
     page_metas: &[PageMeta],
     config: &Config,
     cache: &mut HashMap<PathBuf, HtmlDocument>,
-    asset_hashes: &HashMap<String, String>
+    asset_hashes: &HashMap<String, String>,
+    minify: bool
 ) -> Result<(), Box<dyn Error>> {
     for dir in file_map.subdirs_at(prefix) {
         process_typst_files(
@@ -111,7 +119,8 @@ fn process_typst_files(
             page_metas,
             config,
             cache,
-            asset_hashes
+            asset_hashes,
+            minify
         )?;
     }
 
@@ -148,9 +157,19 @@ fn process_typst_files(
         context.insert("content", &typst_html);
         context.insert("site", &config.site);
 
-        let rendered = bust_image_urls(&tera.render("index.html", &context)?, asset_hashes);
+        let rendered =
+            bust_image_urls(&tera.render("index.html", &context)?, asset_hashes).into_bytes();
+
+        debug!("Minifying");
+        let minified = if minify {
+            let cfg = minify_html::Cfg::new();
+            minify_html::minify(&rendered, &cfg)
+        } else {
+            rendered
+        };
+
         debug!("Writing file {}", out_dir.display());
-        fs::write(out_path, rendered)?;
+        fs::write(out_path, minified)?;
     }
     Ok(())
 }

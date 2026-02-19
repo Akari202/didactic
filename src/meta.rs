@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use log::debug;
+use log::{debug, warn};
+use typst::foundations::{Dict, Str, Value};
 use typst_as_lib::TypstEngine;
 use typst_html::HtmlDocument;
 
@@ -31,15 +32,18 @@ pub fn collect_page_meta(
         if file_map.contains(&index) {
             let real = file_map.get_real(&index).unwrap();
             debug!("Compiling index path {}", real.display());
+            let mut inputs = Dict::new();
+            inputs.insert("target".into(), Value::Str(Str::from("html")));
             let doc: HtmlDocument = engine
-                .compile(real.to_str().unwrap())
+                .compile_with_input(real.to_str().unwrap(), inputs)
                 .output
                 .map_err(|e| format!("Compile failed: {:?}", e))?;
             let stem = dir.file_stem().unwrap().to_string_lossy();
             let url = format!(
                 "/{}",
                 index
-                    .with_extension("html")
+                    .parent()
+                    .expect("Unable to get parent")
                     .to_str()
                     .unwrap()
                     .replace('\\', "/")
@@ -58,6 +62,11 @@ pub fn collect_page_meta(
                 date,
                 children
             });
+        } else {
+            warn!(
+                "Skipping directory {} as it has no index.typ",
+                dir.display()
+            );
         }
     }
 
@@ -68,8 +77,10 @@ pub fn collect_page_meta(
 
         let real = file_map.get_real(logical).unwrap();
         debug!("Compiling path {}", real.display());
+        let mut inputs = Dict::new();
+        inputs.insert("target".into(), Value::Str(Str::from("html")));
         let doc: HtmlDocument = engine
-            .compile(real.to_str().unwrap())
+            .compile_with_input(real.to_str().unwrap(), inputs)
             .output
             .map_err(|e| format!("{:?}", e))?;
         let url = format!(

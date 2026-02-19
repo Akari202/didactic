@@ -24,8 +24,6 @@ impl FileMap {
         dir: &Path,
         prefix: Option<&Path>
     ) -> Result<(), Box<dyn Error>> {
-        // let dir = dir.canonicalize()?;
-        // self.walk(&dir, &dir, prefix)
         self.walk(dir, dir, prefix)
     }
 
@@ -48,7 +46,7 @@ impl FileMap {
                 None => relative.to_path_buf()
             };
             if real.is_dir() {
-                self.walk(&real, base, Some(&logical))?;
+                self.walk(&real, &real, Some(&logical))?;
             } else {
                 let stored_real = match &self.resolver_base {
                     Some(base) => real
@@ -57,7 +55,9 @@ impl FileMap {
                         .unwrap_or_else(|_| real.clone()),
                     None => real.clone()
                 };
-                self.entries.insert(logical, stored_real);
+                if stored_real.file_stem().unwrap() != "lib" {
+                    self.entries.insert(logical, stored_real);
+                }
             }
             Ok::<(), Box<dyn Error>>(())
         })?;

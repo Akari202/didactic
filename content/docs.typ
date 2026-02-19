@@ -1,13 +1,11 @@
 #set document(title: "Documentation", date: datetime(year: 2026, month: 2, day: 17))
 
-= Documentation
+#title()
 
 == Project Structure
 
-#raw(
-  block: true,
-  lang: "sh",
-  "your-site/
+```sh
+your-site/
 ├── didactic.toml
 ├── content/
 │   └── index.typ
@@ -15,25 +13,37 @@
 │   ├── index.html
 │   └── main.scss
 └── dist/",
-)
+```
 
 == Config File
 
 Generally self explanatory. The links will be compiled in at the slug.
 
-#raw(
-  block: true,
-  lang: "toml",
-  "[site]
+```toml
+[site]
 title = \"\"
 author = \"\"
 base_url = \"https://example.com\"
+description = \"optional field\"
 
 [[links]]
 slug = \"name\"
 path = \"path/to/content/dir\"
-",
-)
+```
+
+= Templates
+
+Didactic uses #link("https://keats.github.io/tera/")[Tera] for templating.
+
+== Template Variables
+/ `site.title`: From `didactic.toml`
+/ `site.author`: From `didactic.toml`
+/ `site.base_url`: From `didactic.toml`
+/ `site.description`: From `didactic.toml`
+/ `menu`: List of pages for navigation. Each menu item exposes `title`, `url`, `section`, and
+  `children`. Children are only used on index pages.
+/ `content`: Rendered content
+/ `current_section`: Current directory name
 
 = Typst
 
@@ -45,37 +55,67 @@ page at the same relative path.
 Every page needs to declare a title and optionally a date. Pages without a date are not included in
 RSS.
 
-#raw(
-  block: true,
-  lang: "typst",
-  "#set document(title: \"\", date: datetime(year: 1970, month: 1, day: 1))",
-)
+```typst
+#set document(title: \"\", date: datetime(year: 1970, month: 1, day: 1))
+```
 
 == Math
 
 Math has to be rendered using `html.frame`, which produces inline SVGs. This can be done
 automatically by putting this at the top of your document:
 
-#raw(block: true, lang: "typst", "#show math.equation: it => html.frame(it)")
+```typst
+#show math.equation: it => html.frame(it)
+```
 
 Then write math as normal.
-
-#raw(block: true, lang: "typst", "$ x = (-b plus.minus sqrt(b^2 - 4a c)) / (2a) $")
-
+```typst
+$ x = (-b plus.minus sqrt(b^2 - 4a c)) / (2a) $
+```
 Becomes:
 
 #show math.equation: it => html.frame(it)
 $ x = (-b plus.minus sqrt(b^2 - 4a c)) / (2a) $
 
-= Templates
+== Images
 
-Didactic uses #link("https://keats.github.io/tera/")[Tera] for templating.
+Typst will by default include images as a base64 blob inline. Didactic does not detect this
+happening and will copy all assets to `dist` regardless. Images can be inserted using an `img` block
+like so:
 
-== Template Variables
-/ `site.title`: From `didactic.toml`
-/ `site.author`: From `didactic.toml`
-/ `site.base_url`: From `didactic.toml`
-/ `menu`: List of pages for navigation. Each menu item exposes `title`, `url`, `section`, and
-  `children`. Children are only used on index pages.
-/ `content`: Rendered content
-/ `current_section`: Current directory name
+```typst
+#let _target = sys.inputs.at("target", default: "paged")
+
+#show math.equation: it => if _target == "html" {
+  html.frame(it)
+} else {
+  it
+}
+
+#let image(src, alt: "", width: auto, class: "") = {
+  if _target == "html" {
+    let attrs = if width != auto {
+      let px_width = str(width.pt()) + "px"
+      (
+        src: src,
+        alt: alt,
+        title: alt,
+        class: class,
+        width: px_width,
+      )
+    } else {
+      (
+        src: src,
+        alt: alt,
+        title: alt,
+        class: class,
+      )
+    }
+    html.elem("img", attrs: attrs)
+  } else {
+    std.image(src, width: width, alt: alt)
+  }
+}
+```
+Also of note, Didactic passes the input `target` as `html` to the typst compiler. Typst's builtin
+`#target()` requires context and ive found it to give unexpected results.
