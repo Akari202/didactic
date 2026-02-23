@@ -58,6 +58,14 @@ Serve it locally with:
 python -m http.server --directory dist
 ```
 
+== Commands
+/ `didactic help`: Show help text
+/ `didactic build`: Builds a site
+  / `-m`: Minify the output
+  / `-d`: The root directory to build [default: `./`]
+/ `didactic clean`: Clean the build directory byt deleting the `dist` folder
+  / `-d`: The root directory of the build to clean [default: `./`]
+
 == Missing Stuff
 - Typst html support is brand new and missing a ton of features, math is currently just an svg.
   - Also, your lsp is not going to like html specific typst because its currently feature gated.

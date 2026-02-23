@@ -2,7 +2,7 @@
 
 #title()
 
-== Project Structure
+= Project Structure
 
 ```sh
 your-site/

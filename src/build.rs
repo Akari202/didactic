@@ -132,7 +132,7 @@ fn process_typst_files(
             .ok_or_else(|| format!("no cached doc for {}", logical.display()))?;
 
         let typst_html =
-            extract_body_content(&typst_html::html(&doc).map_err(|e| format!("{:?}", e))?);
+            extract_body_content(&typst_html::html(&doc).map_err(|e| format!("{e:?}"))?);
 
         let mut out_path = out_dir.join(logical);
         out_path.set_extension("html");
@@ -160,8 +160,8 @@ fn process_typst_files(
         let rendered =
             bust_image_urls(&tera.render("index.html", &context)?, asset_hashes).into_bytes();
 
-        debug!("Minifying");
         let minified = if minify {
+            debug!("Minifying");
             let cfg = minify_html::Cfg::new();
             minify_html::minify(&rendered, &cfg)
         } else {
@@ -191,12 +191,12 @@ fn generate_rss(pages: &[PageMeta], config: &Config, out_dir: &Path) -> Result<(
         .filter(|p| p.date.is_some() && p.children.is_empty())
         .map(|p| {
             format!(
-                r#"    <item>
+                r"    <item>
       <title>{}</title>
       <link>{}{}</link>
       <guid>{}{}</guid>
       <pubDate>{}</pubDate>
-    </item>"#,
+    </item>",
                 escape_xml(&p.title),
                 base,
                 p.url,
@@ -214,12 +214,12 @@ fn generate_rss(pages: &[PageMeta], config: &Config, out_dir: &Path) -> Result<(
         .filter(|p| p.date.is_some())
         .map(|p| {
             format!(
-                r#"    <item>
+                r"    <item>
       <title>{}</title>
       <link>{}{}</link>
       <guid>{}{}</guid>
       <pubDate>{}</pubDate>
-    </item>"#,
+    </item>",
                 escape_xml(&p.title),
                 base,
                 p.url,
@@ -269,8 +269,7 @@ fn extract_body_content(html: &str) -> String {
     document
         .select(&selector)
         .next()
-        .map(|body| body.inner_html())
-        .unwrap_or_else(|| html.to_string())
+        .map_or_else(|| html.to_string(), |body| body.inner_html())
 }
 
 fn hash_file(path: &Path) -> Result<String, Box<dyn Error>> {
@@ -290,14 +289,12 @@ fn collect_asset_hashes(
             hashes.extend(collect_asset_hashes(&path, base)?);
         } else {
             let ext = path.extension().and_then(|s| s.to_str());
-            match ext {
-                Some("html") | Some("typ") => {}
-                _ => {
-                    let hash = hash_file(&path)?;
-                    let rel = path.strip_prefix(base)?;
-                    let url = format!("/{}", rel.to_str().unwrap().replace('\\', "/"));
-                    hashes.insert(url, hash);
-                }
+            if let Some("html" | "typ") = ext {
+            } else {
+                let hash = hash_file(&path)?;
+                let rel = path.strip_prefix(base)?;
+                let url = format!("/{}", rel.to_str().unwrap().replace('\\', "/"));
+                hashes.insert(url, hash);
             }
         }
     }
@@ -311,7 +308,7 @@ fn bust_image_urls(html: &str, asset_hashes: &HashMap<String, String>) -> String
         let src = &caps[2];
         let after = &caps[3];
         if let Some(hash) = asset_hashes.get(src) {
-            format!(r#"<img{}src="{}?v={}"{}>"#, before, src, hash, after)
+            format!(r#"<img{before}src="{src}?v={hash}"{after}>"#)
         } else {
             caps[0].to_string()
         }
@@ -329,12 +326,11 @@ fn copy_assets(src: &Path, dst: &Path) -> Result<(), Box<dyn Error>> {
             copy_assets(&path, &dest_dir)?;
         } else {
             let ext = path.extension().and_then(|s| s.to_str());
-            match ext {
-                Some("typ") | Some("toml") | Some("scss") => {}
-                _ => {
-                    let dest = dst.join(path.file_name().unwrap());
-                    fs::copy(&path, &dest)?;
-                }
+
+            if let Some("typ" | "toml" | "scss") = ext {
+            } else {
+                let dst = dst.join(path.file_name().unwrap());
+                fs::copy(&path, &dst)?;
             }
         }
     }

@@ -1,0 +1,5 @@
+[site]
+title = "Test"
+author = "Akari202"
+base_url = "https://example.com"
+description = "Test description"

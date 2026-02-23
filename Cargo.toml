@@ -2,6 +2,12 @@
 name = "didactic"
 version = "0.1.1"
 edition = "2024"
+authors = ["Akari Harada <akaritwo0two@gmail.com>"]
+description = "A simple typst and tera based static site generator"
+license = "GPL-3"
+repository = "https://github.com/Akari202/didactic"
+keywords = ["ssg", "tera", "typst"]
+exclude = [".github/", ".gitignore", "content/", "rsutfmt.toml", "test/"]
 
 [dependencies]
 clap = { version = "4.5.59", features = ["derive"] }

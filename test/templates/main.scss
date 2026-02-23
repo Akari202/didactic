@@ -1,0 +1,56 @@
+$bg-color: #fdfdfd;
+$text-color: #1a1a1a;
+$link-color: #0000ee;
+$link-visited: #551a8b;
+$border-style: 1px dashed #999;
+$mono: "Computer Modern Typewriter", "Courier New", Courier, monospace;
+$serif: "Computer Modern Serif", "Times New Roman", Times, serif;
+
+body,
+.inner-body {
+  font-family: $serif;
+  background-color: $bg-color;
+  color: $text-color;
+  line-height: 1.6;
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #999;
+}
+
+header nav {
+  font-family: $mono;
+  font-weight: bold;
+}
+
+hr {
+  border: none;
+  border-top: $border-style;
+}
+
+a {
+  color: $link-color;
+  text-decoration: none;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+h1,
+h2,
+h3 {
+  margin-top: 1.5rem;
+  border-bottom: $border-style;
+}
+
+pre,
+code {
+  background: #eee;
+  padding: 2px 4px;
+  font-family: $mono;
+}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block title %}Home - {{ site.title }}{% endblock %}
+
+{% block content %}
+    <section class="intro">
+        {{ content | safe }}
+    </section>
+{% endblock content %}
+

@@ -1,8 +1,11 @@
+#[warn(clippy::pedantic, clippy::cargo)]
 mod build;
 mod config;
 mod file_map;
 mod meta;
 mod path_util;
+#[cfg(test)]
+mod test;
 
 use std::fs;
 
