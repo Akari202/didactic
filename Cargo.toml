@@ -6,6 +6,7 @@ authors = ["Akari Harada <akaritwo0two@gmail.com>"]
 description = "A simple typst and tera based static site generator"
 license = "	GPL-3.0-only"
 repository = "https://github.com/Akari202/didactic"
+homepage = "https://akada.dev/didactic/"
 keywords = ["ssg", "tera", "typst"]
 exclude = [".github/", ".gitignore", "content/", "rsutfmt.toml", "test/"]
 

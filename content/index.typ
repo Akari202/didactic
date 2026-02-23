@@ -40,10 +40,10 @@ are a ton of pain points currently.
 
 == Quickstart
 
-Install with cargo:
+Install with cargo or download binary from releases:
 
 ```sh
-cargo install --git https://github.com/Akari202/didactic
+cargo install didactic
 ```
 
 Build the site to `dist`:
