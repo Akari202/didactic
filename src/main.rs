@@ -20,7 +20,10 @@ use crate::path_util::DisplayablePathBuf;
 #[command(name = "didactic", about = "Simple typst SSG", version, about)]
 struct Cli {
     #[command(subcommand)]
-    command: Commands
+    command: Commands,
+    /// Increase logging verbosity
+    #[arg(short, long, global = true)]
+    verbose: bool
 }
 
 #[derive(Subcommand)]
@@ -44,12 +47,14 @@ enum Commands {
 }
 
 fn main() {
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let cli = Cli::parse();
+
+    let log_level = if cli.verbose { "debug" } else { "info" };
+    env_logger::Builder::from_env(Env::default().default_filter_or(log_level)).init();
 
     match cli.command {
         Commands::Build { minify, dir } => {
-            if let Err(e) = run_build(dir.0, minify) {
+            if let Err(e) = run_build(&dir.0, minify) {
                 error!("Build failed: {}", e);
             }
         }

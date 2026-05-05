@@ -1,4 +1,8 @@
-#set document(title: "Documentation", date: datetime(year: 2026, month: 2, day: 17))
+#import "@local/akari-macros:0.1.0": *
+#show: minimal-setup.with(
+  title: "Documentation",
+  date: datetime(year: 2026, month: 2, day: 17),
+)
 
 #title()
 
@@ -10,9 +14,10 @@ your-site/
 ├── content/
 │   └── index.typ
 ├── templates/
+│   ├── packages/
 │   ├── index.html
 │   └── main.scss
-└── dist/",
+└── dist/
 ```
 
 == Config File
@@ -21,14 +26,14 @@ Generally self explanatory. The links will be compiled in at the slug.
 
 ```toml
 [site]
-title = \"\"
-author = \"\"
-base_url = \"https://example.com\"
-description = \"optional field\"
+title = ""
+author = ""
+base_url = "https://example.com"
+description = "optional field"
 
 [[links]]
-slug = \"name\"
-path = \"path/to/content/dir\"
+slug = "name"
+path = "path/to/content/dir"
 ```
 
 = Templates
@@ -56,8 +61,22 @@ Every page needs to declare a title and optionally a date. Pages without a date 
 RSS.
 
 ```typst
-#set document(title: \"\", date: datetime(year: 1970, month: 1, day: 1))
+#set document(title: "", date: datetime(year: 1970, month: 1, day: 1))
 ```
+
+== Packages
+
+Didactic adds `templates/packages` to the file resolver and local packages should be placed there
+for convenience. Unfortunately this utilizes typst's local resolver which expects the import
+statement:
+```typst
+#import "@local/package-name:0.1.0": *
+```
+This searches the path:
+```sh
+templates/packages/local/package-name/0.1.0/
+```
+For a `typst.toml` file.
 
 == Math
 
@@ -65,7 +84,11 @@ Math has to be rendered using `html.frame`, which produces inline SVGs. This can
 automatically by putting this at the top of your document:
 
 ```typst
-#show math.equation: it => html.frame(it)
+#show math.equation: it => if it.block {
+  html.frame(it)
+} else {
+  box(html.frame(it))
+}
 ```
 
 Then write math as normal.
@@ -74,48 +97,58 @@ $ x = (-b plus.minus sqrt(b^2 - 4a c)) / (2a) $
 ```
 Becomes:
 
-#show math.equation: it => html.frame(it)
 $ x = (-b plus.minus sqrt(b^2 - 4a c)) / (2a) $
 
 == Images
 
 Typst will by default include images as a base64 blob inline. Didactic does not detect this
-happening and will copy all assets to `dist` regardless. Images can be inserted using an `img` block
-like so:
+happening and will copy all assets to `dist` regardless. Images should be inserted using an `img`
+block.
+
+== Suggested Show Rules
 
 ```typst
-#let _target = sys.inputs.at("target", default: "paged")
+#let compile-host = sys.inputs.at("compile-host", default: "cli")
 
-#show math.equation: it => if _target == "html" {
-  html.frame(it)
+#show math.equation: it => if compile-host == "didactic" {
+  if it.block {
+    html.frame(it)
+  } else {
+    box(html.frame(it))
+  }
 } else {
   it
 }
 
-#let image(src, alt: "", width: auto, class: "") = {
-  if _target == "html" {
-    let attrs = if width != auto {
-      let px_width = str(width.pt()) + "px"
-      (
-        src: src,
-        alt: alt,
-        title: alt,
-        class: class,
-        width: px_width,
-      )
-    } else {
-      (
-        src: src,
-        alt: alt,
-        title: alt,
-        class: class,
-      )
-    }
-    html.elem("img", attrs: attrs)
-  } else {
-    std.image(src, width: width, alt: alt)
-  }
+#show line.where(length: 100%): it => if compile-host == "didactic" {
+  html.elem("hr")
+} else {
+  it
 }
+
+#show align: it => if compile-host == "didactic" {
+  html.elem("div", attrs: (style: "text-align: center;"), it.body)
+} else {
+  it
+}
+
+#show image: it => if compile-host == "didactic" {
+  let px_width = if it.width != auto {
+    str(it.width.pt()) + "px"
+  } else {
+    none
+  }
+
+  html.elem("img", attrs: (
+    src: it.path,
+    alt: it.alt,
+    title: it.alt,
+    width: px_width,
+  ))
+} else {
+  it
+}
+
 ```
-Also of note, Didactic passes the input `target` as `html` to the typst compiler. Typst's builtin
-`#target()` requires context and ive found it to give unexpected results.
+Also of note, Didactic passes the input `compile-host` as `didactic` to the typst compiler. Typst's
+builtin `#target()` requires context and ive found it to give unexpected results.

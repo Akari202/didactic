@@ -8,6 +8,7 @@ use regex::{Captures, Regex};
 use scraper::{Html, Selector};
 use tera::{Context, Tera};
 use typst_as_lib::TypstEngine;
+use typst_as_lib::file_resolver::FileSystemResolver;
 use typst_html::HtmlDocument;
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -15,7 +16,7 @@ use crate::config::Config;
 use crate::file_map::FileMap;
 use crate::meta::{PageMeta, collect_page_meta};
 
-pub fn run_build(dir: PathBuf, minify: bool) -> Result<(), Box<dyn Error>> {
+pub fn run_build(dir: &PathBuf, minify: bool) -> Result<(), Box<dyn Error>> {
     let content_path = dir.join("content");
     let output_path = dir.join("dist");
     fs::create_dir_all(&output_path)?;
@@ -29,7 +30,7 @@ pub fn run_build(dir: PathBuf, minify: bool) -> Result<(), Box<dyn Error>> {
     }?;
 
     info!("Building logical map");
-    let mut file_map = FileMap::with_resolver_base(&dir);
+    let mut file_map = FileMap::with_resolver_base(dir);
     file_map.add_directory(&content_path, None)?;
     config
         .links
@@ -69,7 +70,9 @@ pub fn run_build(dir: PathBuf, minify: bool) -> Result<(), Box<dyn Error>> {
 
     info!("Initializing Typst engine");
     let engine = TypstEngine::builder()
-        .with_file_system_resolver(dir)
+        .add_file_resolver(
+            FileSystemResolver::new(dir.clone()).local_package_root(dir.join("templates/packages"))
+        )
         .fonts(typst_assets::fonts())
         .build();
 

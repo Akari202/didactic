@@ -26,16 +26,18 @@ pub fn collect_page_meta(
     is_root: bool
 ) -> Result<Vec<PageMeta>, Box<dyn Error>> {
     let mut items = Vec::new();
+    let mut inputs = Dict::new();
+    // Deprecated, will remove in v0.2.0
+    inputs.insert("target".into(), Value::Str(Str::from("html")));
+    inputs.insert("compile-host".into(), Value::Str(Str::from("didactic")));
 
     for dir in file_map.subdirs_at(prefix) {
         let index = dir.join("index.typ");
         if file_map.contains(&index) {
             let real = file_map.get_real(&index).unwrap();
             debug!("Compiling index path {}", real.display());
-            let mut inputs = Dict::new();
-            inputs.insert("target".into(), Value::Str(Str::from("html")));
             let doc: HtmlDocument = engine
-                .compile_with_input(real.to_str().unwrap(), inputs)
+                .compile_with_input(real.to_str().unwrap(), inputs.clone())
                 .output
                 .map_err(|e| format!("Compile failed: {:?}", e))?;
             let stem = dir.file_stem().unwrap().to_string_lossy();
@@ -77,10 +79,8 @@ pub fn collect_page_meta(
 
         let real = file_map.get_real(logical).unwrap();
         debug!("Compiling path {}", real.display());
-        let mut inputs = Dict::new();
-        inputs.insert("target".into(), Value::Str(Str::from("html")));
         let doc: HtmlDocument = engine
-            .compile_with_input(real.to_str().unwrap(), inputs)
+            .compile_with_input(real.to_str().unwrap(), inputs.clone())
             .output
             .map_err(|e| format!("{:?}", e))?;
         let url = format!(
