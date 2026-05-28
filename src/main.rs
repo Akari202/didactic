@@ -1,11 +1,9 @@
 #[warn(clippy::pedantic, clippy::cargo)]
-mod build;
 mod config;
+mod error;
 mod file_map;
-mod meta;
 mod path_util;
-#[cfg(test)]
-mod test;
+mod world;
 
 use std::fs;
 
@@ -13,8 +11,8 @@ use clap::{Parser, Subcommand};
 use env_logger::Env;
 use log::{error, info};
 
-use crate::build::run_build;
 use crate::path_util::DisplayablePathBuf;
+use crate::world::World;
 
 #[derive(Parser)]
 #[command(name = "didactic", about = "Simple typst SSG", version, about)]
@@ -23,7 +21,10 @@ struct Cli {
     command: Commands,
     /// Increase logging verbosity
     #[arg(short, long, global = true)]
-    verbose: bool
+    verbose: bool,
+    /// Show typst debug logging
+    #[arg(long = "typst-verbose", global = true)]
+    typst_verbose: bool
 }
 
 #[derive(Subcommand)]
@@ -49,20 +50,42 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
 
-    let log_level = if cli.verbose { "debug" } else { "info" };
+    let log_level = if cli.typst_verbose {
+        "debug"
+    } else if cli.verbose {
+        "info,didactic=debug"
+    } else {
+        "info"
+    };
     env_logger::Builder::from_env(Env::default().default_filter_or(log_level)).init();
 
     match cli.command {
         Commands::Build { minify, dir } => {
-            if let Err(e) = run_build(&dir.0, minify) {
-                error!("Build failed: {}", e);
+            info!("Initializing compilation world");
+
+            match World::new(dir.0, minify) {
+                Ok(world) => {
+                    if let Err(e) = world.build() {
+                        error!("Build failed: {}", e);
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to initialize compilation world: {}", e);
+                }
             }
         }
         Commands::Clean { dir } => {
             let output_path = dir.0.join("dist");
-            info!("Removing directory: {}", output_path.display());
-            if let Err(e) = fs::remove_dir_all(&output_path) {
-                error!("Failed: {}", e);
+            if output_path.exists() {
+                info!("Removing directory: {}", output_path.display());
+                if let Err(e) = fs::remove_dir_all(&output_path) {
+                    error!("Clean failed: {}", e);
+                }
+            } else {
+                info!(
+                    "Directory {} does not exist. Nothing to clean.",
+                    output_path.display()
+                );
             }
         }
     }

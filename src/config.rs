@@ -13,11 +13,29 @@ pub struct SiteConfig {
     pub author: String,
     pub base_url: String,
     #[serde(default)]
-    pub description: String
+    pub description: String,
+    #[serde(default = "default_root_content_path")]
+    pub root_content_path: String,
+    #[serde(default = "default_static_content_path")]
+    pub static_content_path: String,
+    #[serde(default = "default_output_path")]
+    pub output_path: String
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct LinkConfig {
     pub slug: String,
     pub path: String
+}
+
+fn default_root_content_path() -> String {
+    "content".to_string()
+}
+
+fn default_static_content_path() -> String {
+    "static".to_string()
+}
+
+fn default_output_path() -> String {
+    "dist".to_string()
 }
