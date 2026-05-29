@@ -8,13 +8,13 @@ use regex::{Captures, Regex};
 use serde::Serialize;
 use tera::{Context, Tera};
 use typst::foundations::{Dict, Smart, Str, Value};
-use typst_as_lib::TypstEngine;
-use typst_as_lib::file_resolver::FileSystemResolver;
-use typst_html::HtmlDocument;
+use typst::model::Document;
+use typst_html::{HtmlDocument, HtmlNode};
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::config::Config;
-use crate::error::DidacticError;
+use crate::engine::TypstEngine;
+use crate::error::{CompilationDiagnostics, DidacticError};
 use crate::file_map::{FileMap, LogicalPath, RealPath};
 
 /// The overall didactic execution context
@@ -33,7 +33,7 @@ pub struct BuildState {
     pub file_map: FileMap,
     // TODO: overhaul cache busting
     // pub asset_hashes: HashMap<String, String>,
-    pub document_cache: HashMap<LogicalPath, (HtmlDocument, PageMeta)>
+    pub document_cache: HashMap<LogicalPath, HtmlDocument>
 }
 
 /// Individual page metadata
@@ -69,13 +69,7 @@ impl World {
         )?;
 
         debug!("Initializing Typst engine");
-        let engine = TypstEngine::builder()
-            .add_file_resolver(
-                FileSystemResolver::new(root_dir.0.clone())
-                    .local_package_root(root_dir.join("templates/packages"))
-            )
-            .fonts(typst_assets::fonts())
-            .build();
+        let engine = TypstEngine::new(Some(10), root_dir.clone());
 
         Ok(Self {
             root_dir,
@@ -88,12 +82,13 @@ impl World {
     }
 
     /// Orchestrates the build
-    pub fn build(&self) -> Result<(), DidacticError> {
+    pub fn build(&mut self) -> Result<(), DidacticError> {
         info!("Building logical map");
         let file_map = self.map_files()?;
         debug!("{}", &file_map);
 
         fs::create_dir_all(&self.output_path)?;
+        self.engine.set_file_map(file_map.clone());
         let mut state = BuildState {
             file_map,
             ..Default::default()
@@ -172,36 +167,21 @@ impl World {
     }
 
     fn compile_typst(&self, state: &mut BuildState) -> Result<(), DidacticError> {
-        let mut inputs = Dict::new();
-        // Deprecated, will remove in v0.2.0
-        inputs.insert("target".into(), Value::Str(Str::from("html")));
-        inputs.insert("compile-host".into(), Value::Str(Str::from("didactic")));
-
         for (logical, real) in state
             .file_map
             .filter_entries(|_, real| real.extension().and_then(|s| s.to_str()) == Some("typ"))
         {
-            let stripped_path = real
-                .strip_prefix(self.root_dir.clone())
-                .map(|p| PathBuf::from("./").join(p))
-                .unwrap_or_else(|_| real.0.clone());
-            let string_path = stripped_path
-                .to_str()
-                .ok_or_else(|| DidacticError::InvalidUtf8(real.display().to_string()))?;
             debug!("Compiling typst: {}", real.display(),);
-            let compile_result = self
-                .engine
-                .compile_with_input(string_path, inputs.clone())
+            let compilation_output = self.engine.compile_to_html(logical)?;
+            for warning in compilation_output.warnings {
+                warn!("Typst warning: {}", warning.message);
+            }
+            let compile_result = compilation_output
                 .output
-                .map_err(|e| DidacticError::TypstCompilationFailed {
-                    path: string_path.to_string(),
-                    details: format!("{:?}", e)
-                });
+                .map_err(CompilationDiagnostics::from);
             match compile_result {
                 Ok(doc) => {
-                    let meta = World::extract_meta(&doc, logical, real)?;
-                    debug!("{:?}", &meta);
-                    state.document_cache.insert(logical.clone(), (doc, meta));
+                    state.document_cache.insert(logical.clone(), doc);
                 }
                 Err(e) => {
                     error!("{e}");
@@ -218,7 +198,7 @@ impl World {
     ) -> Result<PageMeta, DidacticError> {
         let date_format = "[weekday repr:short], [day] [month repr:short] [year] [hour]:[minute]:[second] [offset_hour sign:mandatory][offset_minute]";
         let description = time::format_description::parse(date_format).unwrap();
-        let date = match doc.info.date {
+        let date = match doc.info().date {
             Smart::Custom(Some(typst::foundations::Datetime::Datetime(datetime))) => {
                 datetime.assume_utc()
             }
@@ -227,7 +207,6 @@ impl World {
                 time::PrimitiveDateTime::new(date, midnight).assume_utc()
             }
             Smart::Custom(Some(typst::foundations::Datetime::Time(time))) => {
-                // Default the date component to today's date
                 let today = time::OffsetDateTime::now_utc().date();
                 time::PrimitiveDateTime::new(today, time).assume_utc()
             }
@@ -237,14 +216,18 @@ impl World {
 
         Ok(PageMeta {
             title: doc
-                .info
+                .info()
                 .title
                 .as_ref()
                 .ok_or(DidacticError::MissingTitle(real.display().to_string()))?
                 .to_string(),
             url: logical.with_extension("html").to_url_string(),
             date,
-            author: doc.info.author.join(", ")
+            author: doc.info().author.join(", ")
         })
+    }
+
+    fn extract_html_body(doc: &HtmlDocument) -> Result<&HtmlNode, DidacticError> {
+        doc.root().children.get(1).ok_or(DidacticError::MissingBody)
     }
 }

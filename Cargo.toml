@@ -20,10 +20,24 @@ regex = "1.12.3"
 serde = { version = "1.0.228", features = ["derive"] }
 tera = "1.20.1"
 thiserror = "2.0.18"
-time = "0.3.47"
+time = { version = "0.3.47", features = ["local-offset"] }
 toml = "1.0.2"
-typst = "0.14.2"
-typst-as-lib = { version = "0.15.4", features = ["typst-html"] }
+typst = { version = "0.14.2" }
 typst-assets = { version = "0.14.2", features = ["fonts"] }
-typst-html = "0.14.2"
+typst-html = { version = "0.14.2" }
+typst-kit = { version = "0.14.2", features = [
+  "embedded-fonts",
+  "scan-fonts",
+  "universe-packages"
+] }
+typst-syntax = { version = "0.14.2" }
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+
+comemo = "0.4.0"
+ecow = "0.2.6"
+
+[patch.crates-io]
+typst = { git = "https://github.com/typst/typst", rev = "e45d37b" }
+typst-html = { git = "https://github.com/typst/typst", rev = "e45d37b" }
+typst-kit = { git = "https://github.com/typst/typst", rev = "e45d37b" }
+typst-syntax = { git = "https://github.com/typst/typst", rev = "e45d37b" }

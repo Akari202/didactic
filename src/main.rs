@@ -1,5 +1,6 @@
 #[warn(clippy::pedantic, clippy::cargo)]
 mod config;
+mod engine;
 mod error;
 mod file_map;
 mod path_util;
@@ -64,7 +65,7 @@ fn main() {
             info!("Initializing compilation world");
 
             match World::new(dir.0, minify) {
-                Ok(world) => {
+                Ok(mut world) => {
                     if let Err(e) = world.build() {
                         error!("Build failed: {}", e);
                     }

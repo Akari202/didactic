@@ -5,6 +5,7 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
 use log::debug;
+use typst::syntax::{FileId, RootedPath};
 
 use crate::error::DidacticError;
 
@@ -110,23 +111,23 @@ impl FileMap {
         self.entries.get(logical)
     }
 
-    pub fn subdirs_at(&self, prefix: &Path) -> Result<HashSet<LogicalPath>, DidacticError> {
-        self.entries.keys().try_fold(HashSet::new(), |mut acc, k| {
-            if let Ok(rel) = k.strip_prefix(prefix) {
-                let mut components = rel.components();
-                if let Some(first) = components.next()
-                    && components.next().is_some()
-                {
-                    acc.insert(LogicalPath(prefix.join(first)));
-                }
-            }
-            Ok(acc)
-        })
-    }
+    // pub fn subdirs_at(&self, prefix: &Path) -> Result<HashSet<LogicalPath>, DidacticError> {
+    //     self.entries.keys().try_fold(HashSet::new(), |mut acc, k| {
+    //         if let Ok(rel) = k.strip_prefix(prefix) {
+    //             let mut components = rel.components();
+    //             if let Some(first) = components.next()
+    //                 && components.next().is_some()
+    //             {
+    //                 acc.insert(LogicalPath(prefix.join(first)));
+    //             }
+    //         }
+    //         Ok(acc)
+    //     })
+    // }
 
-    pub fn contains(&self, logical: &LogicalPath) -> bool {
-        self.entries.contains_key(logical)
-    }
+    // pub fn contains(&self, logical: &LogicalPath) -> bool {
+    //     self.entries.contains_key(logical)
+    // }
 
     pub fn filter_entries<'a, F>(
         &'a self,
@@ -221,5 +222,18 @@ impl From<&str> for RealPath {
 impl From<String> for RealPath {
     fn from(path: String) -> Self {
         Self(PathBuf::from(path))
+    }
+}
+
+impl From<FileId> for LogicalPath {
+    fn from(id: FileId) -> Self {
+        let rootless_str = id.vpath().get_without_slash();
+        Self(PathBuf::from(rootless_str))
+    }
+}
+
+impl From<&FileId> for LogicalPath {
+    fn from(id: &FileId) -> Self {
+        Self::from(*id)
     }
 }
