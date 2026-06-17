@@ -7,9 +7,12 @@ use log::{debug, error, info, warn};
 use regex::{Captures, Regex};
 use serde::Serialize;
 use tera::{Context, Tera};
-use typst::foundations::{Dict, Smart, Str, Value};
-use typst::model::Document;
-use typst_html::{HtmlDocument, HtmlNode};
+use typst::comemo::Track;
+use typst::foundations::{Dict, Smart, Str, Value, target};
+use typst::introspection::Introspector;
+use typst::model::{Document, LateLinkResolver};
+use typst_html::{HtmlDocument, HtmlElement, HtmlNode, html_in_bundle};
+use typst_syntax::VirtualPath;
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::config::Config;
@@ -29,7 +32,7 @@ pub struct World {
 
 /// The dynamic build state
 #[derive(Default, Debug)]
-pub struct BuildState {
+struct BuildState {
     pub file_map: FileMap,
     // TODO: overhaul cache busting
     // pub asset_hashes: HashMap<String, String>,
@@ -37,8 +40,8 @@ pub struct BuildState {
 }
 
 /// Individual page metadata
-#[derive(Debug, Hash, Clone)]
-pub struct PageMeta {
+#[derive(Debug, Hash, Clone, Serialize)]
+struct PageMeta {
     pub title: String,
     pub url: String,
     // pub section: String,
@@ -102,6 +105,9 @@ impl World {
 
         info!("Compiling typst");
         self.compile_typst(&mut state)?;
+
+        info!("Templating pages");
+        self.template_pages(&state)?;
 
         Ok(())
     }
@@ -191,11 +197,32 @@ impl World {
         Ok(())
     }
 
-    fn extract_meta(
-        doc: &HtmlDocument,
-        logical: &LogicalPath,
-        real: &RealPath
-    ) -> Result<PageMeta, DidacticError> {
+    fn template_pages(&self, state: &BuildState) -> Result<(), DidacticError> {
+        for (logical, doc) in &state.document_cache {
+            let out_path = logical
+                .with_extension("html")
+                .with_output_path(&self.output_path);
+            let meta = World::extract_meta(doc, logical)?;
+            let body = World::extract_html_body(doc)?;
+            let base = VirtualPath::new(logical.to_url_string())?;
+            let link_resolver =
+                LateLinkResolver::new(Some(&base), &**doc.introspector() as &dyn Introspector);
+            let html_string = html_in_bundle(body, link_resolver.track())
+                .map_err(CompilationDiagnostics::from)?;
+            let mut context = Context::new();
+            // context.insert("current_section", );
+            // context.insert("menu", &page_metas);
+            context.insert("content", &html_string);
+            context.insert("site", &self.config.site);
+            // TODO: template seleciton
+            let rendered = self.tera.render("index.html", &context)?;
+            out_path.make_parent()?;
+            fs::write(out_path, rendered)?;
+        }
+        Ok(())
+    }
+
+    fn extract_meta(doc: &HtmlDocument, logical: &LogicalPath) -> Result<PageMeta, DidacticError> {
         let date_format = "[weekday repr:short], [day] [month repr:short] [year] [hour]:[minute]:[second] [offset_hour sign:mandatory][offset_minute]";
         let description = time::format_description::parse(date_format).unwrap();
         let date = match doc.info().date {
@@ -219,7 +246,7 @@ impl World {
                 .info()
                 .title
                 .as_ref()
-                .ok_or(DidacticError::MissingTitle(real.display().to_string()))?
+                .ok_or(DidacticError::MissingTitle(logical.display().to_string()))?
                 .to_string(),
             url: logical.with_extension("html").to_url_string(),
             date,
@@ -227,7 +254,11 @@ impl World {
         })
     }
 
-    fn extract_html_body(doc: &HtmlDocument) -> Result<&HtmlNode, DidacticError> {
-        doc.root().children.get(1).ok_or(DidacticError::MissingBody)
+    fn extract_html_body(doc: &HtmlDocument) -> Result<&HtmlElement, DidacticError> {
+        match doc.root().children.get(1) {
+            None => Err(DidacticError::MissingBody),
+            Some(HtmlNode::Element(elem)) => Ok(elem),
+            Some(_) => Err(DidacticError::MissingBody)
+        }
     }
 }

@@ -28,6 +28,8 @@ pub enum DidacticError {
     MissingTitle(String),
     #[error("Html body not found")]
     MissingBody,
+    // #[error("Introspector is missing")]
+    // MissingIntrospector,
     #[error("Error: {:?}", 0)]
     EngineError(#[from] CompilationDiagnostics),
     #[error("Path parsing error: {0}")]
